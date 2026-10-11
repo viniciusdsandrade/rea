@@ -39,6 +39,7 @@ const pathRequests: readonly [string, Record<string, unknown>][] = [
   ["extract_firmware", { path: nul, output_directory: "/tmp/out" }],
   ["extract_firmware", { path: "/tmp/firmware.bin", output_directory: nul }],
   ["inspect_plist", { path: nul }],
+  ["inspect_keyed_archive", { path: nul }],
   ...[
     { kind: "function", name: "main\0suffix" },
     { kind: "function", name: "main", module: "lib.dylib\0suffix" },
