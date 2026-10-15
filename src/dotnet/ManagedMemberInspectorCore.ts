@@ -740,17 +740,31 @@ type DecodedSignature = Omit<
 >;
 
 /**
- * Decode a field or member method signature. A malformed or unsupported blob
- * decodes as kind `unknown` with its reason.
+ * Metadata table that holds a member signature. A Field row holds a FieldSig
+ * and a MethodDef row a MethodDefSig (II.22.15, II.22.26); a MemberRef row
+ * holds either.
+ */
+export type SignatureRow = "field" | "method" | "member-ref";
+
+/**
+ * Decode a field or member method signature. A malformed or unsupported blob,
+ * or one whose form its row cannot hold, decodes as kind `unknown` with its
+ * reason.
  */
 const decodeSignature = (
   blob: Buffer,
   operands: TypeOperand[] = [],
+  row: SignatureRow = "member-ref",
 ): DecodedSignature => {
   try {
     if (blob.length === 0)
       throw managedFailure("invalid-blob", "signature", "empty signature", 0);
     const first = blob[0] ?? 0;
+    if (row !== "member-ref" && (first === 0x06) !== (row === "field"))
+      malformedSignature(
+        `calling convention 0x${first.toString(16)} does not head a ${row === "field" ? "Field" : "MethodDef"} signature`,
+        0,
+      );
     // FieldSig (II.23.2.4) is exactly FIELD; a flagged FIELD header is not a
     // method header either, so it is malformed below.
     if (first === 0x06) {
@@ -887,9 +901,10 @@ export const signature = (
   blob: Buffer,
   rawSha256?: string,
   typeName: SignatureTypeName = () => null,
+  row: SignatureRow = "member-ref",
 ): ManagedSignature => {
   const operands: TypeOperand[] = [];
-  const decoded = decodeSignature(blob, operands);
+  const decoded = decodeSignature(blob, operands, row);
   return {
     raw_length: blob.length,
     raw_sha256: rawSha256 ?? sha256Bytes(blob),

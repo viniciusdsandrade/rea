@@ -17,6 +17,7 @@ import {
   type ManagedMemberRef,
   type ManagedMethod,
   type MemberCore,
+  type SignatureRow,
   type SignatureTypeName,
   type TypeRange,
 } from "./ManagedMemberInspectorCore.js";
@@ -106,7 +107,7 @@ export const parseFields = (
         declaring_type: declared?.fullName ?? null,
         name,
         flags,
-        signature: budgetedSignature(sig, layout, signatureTypeName),
+        signature: budgetedSignature(sig, layout, signatureTypeName, "field"),
       });
     }, issues);
   }
@@ -347,7 +348,12 @@ export const parseMethods = ({
         layout.blob.size,
       );
       cursor.readIndex(layout.tableIndexSize(8));
-      const decoded = budgetedSignature(sig, layout, signatureTypeName);
+      const decoded = budgetedSignature(
+        sig,
+        layout,
+        signatureTypeName,
+        "method",
+      );
       core.set(token, {
         ...member,
         genericArity: signatureGenericArity(decoded),
@@ -490,12 +496,13 @@ const budgetedSignature = (
   bytes: Buffer,
   layout: ManagedMetadataLayout,
   signatureTypeName: SignatureTypeName,
+  row: SignatureRow = "member-ref",
 ): ReturnType<typeof signature> => {
   const budget = managedDecodeBudget(layout);
   budget.admitTransient(bytes.length * 256, layout.blob.offset);
   try {
     return admitManagedProjection(
-      signature(bytes, budget.digest(bytes, "sha256"), signatureTypeName),
+      signature(bytes, budget.digest(bytes, "sha256"), signatureTypeName, row),
       budget,
     );
   } finally {
