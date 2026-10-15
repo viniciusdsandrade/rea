@@ -316,7 +316,7 @@ describe("reconstruction coverage conflicting latest verifier observations", () 
       completeReconstructionCoverageFixture();
     const failed = {
       ...result,
-      status: "fail" as const,
+      status: "fail",
       evidence_ids: [reconstructionCoverageEvidenceId("1")],
     };
     const firstPass = createReconstructionCoverageData({
@@ -543,5 +543,41 @@ describe("reconstruction coverage verifier future timestamps", () => {
         expect.objectContaining({ code: "package-proof-unknown" }),
       ]),
     );
+  });
+});
+
+describe("reconstruction coverage conflicting package proofs", () => {
+  it("keeps a failed package proof failed beside a passing one in either order", () => {
+    const workspace = completeReconstructionCoverageData();
+    const failed = {
+      proof_id: "proof.clean-install.failed",
+      kind: "clean-install",
+      status: "fail",
+      artifact_sha256s: [digest("1")],
+      evidence_ids: [reconstructionCoverageEvidenceId("4")],
+    };
+
+    for (const proofs of [
+      [...workspace.package_proofs, failed],
+      [failed, ...workspace.package_proofs],
+    ])
+      expect(
+        evaluateReconstructionClosure(
+          createReconstructionCoverageData({
+            ...workspace,
+            package_proofs: proofs,
+          }),
+          "replacement.cli",
+          RECONSTRUCTION_COVERAGE_NOW,
+        ),
+      ).toMatchObject({
+        status: "failed",
+        reasons: [
+          {
+            code: "package-proof-failed",
+            subject_id: "clean-install",
+          },
+        ],
+      });
   });
 });
