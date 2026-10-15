@@ -438,16 +438,18 @@ export const evaluateReconstructionPackageProofs = (
       requiredArtifactDigests.every((digest) =>
         proof.artifact_sha256s.includes(digest),
       ) && packageProofHasComparableEvidence(proof, context.evidenceById);
-    const passing = proofs.find(
-      (proof) => proof.status === "pass" && applicable(proof),
-    );
-    if (passing !== undefined) {
-      addEvidence(context, passing.evidence_ids);
-      continue;
-    }
+    // A failed proof fails closed even beside a passing proof for the same
+    // artifacts; proofs carry no ordering that could supersede it.
     const failing = proofs.find(
       (proof) => proof.status === "fail" && applicable(proof),
     );
+    const passing = proofs.find(
+      (proof) => proof.status === "pass" && applicable(proof),
+    );
+    if (failing === undefined && passing !== undefined) {
+      addEvidence(context, passing.evidence_ids);
+      continue;
+    }
     if (failing !== undefined) {
       addEvidence(context, failing.evidence_ids);
       addReason(
