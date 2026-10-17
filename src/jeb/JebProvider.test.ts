@@ -12,6 +12,7 @@ import {
   AnalysisProtocolError,
   AnalysisCancelledError,
   AnalysisTimeoutError,
+  AnalysisUnsupportedTargetError,
 } from "../domain/analysisErrorCore.js";
 import type { JsonValue } from "../domain/jsonValue.js";
 import { jebResultSchemas } from "../domain/jeb/jebAnalysis.js";
@@ -513,6 +514,38 @@ it("preserves provider-authored timeout guidance when projecting the requested o
       remediationAction: timeout.remediationAction,
     });
     expect(result.error.cause).toBe(reason);
+  } finally {
+    await provider.close();
+  }
+});
+
+it("preserves the artifact path when open_jeb_project is refused", async () => {
+  const provider = providerWith(
+    scriptedConnection({
+      get_client_information: {
+        success: true,
+        version: "5.48.0",
+        gui_client: false,
+      },
+      open_project: {
+        success: false,
+        message: "Target file does not exist",
+      },
+    }),
+  );
+  try {
+    const result = await provider.execute({
+      operation: "open_jeb_project",
+      input: { path: "/tmp/missing.apk" },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeInstanceOf(AnalysisUnsupportedTargetError);
+    expect(result.error).toMatchObject({
+      operation: "open_jeb_project",
+      path: "/tmp/missing.apk",
+      reason: "Target file does not exist",
+    });
   } finally {
     await provider.close();
   }
