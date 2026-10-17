@@ -729,6 +729,42 @@ describe("Ghidra malformed property admission", () => {
       ]),
     });
   });
+
+  it.each(["\\\n#unused=\\uZZZZ\n", "  \\\n  !unused=\\uZZZZ\n"])(
+    "parses continued lines starting with '#' or '!' rather than skipping them as comments: %j",
+    (continuedProperty) => {
+      const inspect = (extra: string) =>
+        inspectGhidraInstallation(
+          {
+            environment: {},
+            installDir: INSTALL,
+            platform: "linux",
+            architecture: "x64",
+          },
+          host({
+            readText: () =>
+              `application.version=12.1.4\n${extra}application.java.min=17\n`,
+          }),
+        );
+
+      const broken = inspect(continuedProperty);
+      expect(broken.status).toBe("unavailable");
+      expect(broken.providerVersion).toBeNull();
+      expect(broken.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: "version",
+            status: "failed",
+            code: "version_unresolved",
+            detail: expect.stringContaining("Malformed Unicode escape"),
+          }),
+        ]),
+      );
+
+      expect(inspect("#unused=\\uZZZZ\n").providerVersion).toBe("12.1.4");
+      expect(inspect("\\\n#unused=\\u0041\n").providerVersion).toBe("12.1.4");
+    },
+  );
 });
 
 describe("Ghidra installation version admission", () => {
