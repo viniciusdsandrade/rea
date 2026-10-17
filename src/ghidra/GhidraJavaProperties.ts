@@ -8,8 +8,7 @@ export const parseGhidraJavaProperties = (
   for (const line of logicalPropertyLines(content)) {
     let start = 0;
     while (isPropertyWhitespace(line[start])) start += 1;
-    if (start === line.length || line[start] === "#" || line[start] === "!")
-      continue;
+    if (start === line.length) continue;
     let end = start;
     let escaped = false;
     while (end < line.length) {
