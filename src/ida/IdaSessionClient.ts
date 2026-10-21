@@ -388,7 +388,13 @@ export class IdaSessionClient implements AnalysisClient {
     context: IdaOperationFailureContext,
   ) {
     let failure: AnalysisError;
-    if (wasCancelled(options)) {
+    // A typed failure the provider path already produced keeps its
+    // classification when the caller's abort is observed only afterwards.
+    // Any other cause under an aborted signal is a consequence of that abort.
+    if (
+      cause instanceof AnalysisCancelledError ||
+      (wasCancelled(options) && !(cause instanceof AnalysisError))
+    ) {
       failure = new AnalysisCancelledError(operation, {
         cause,
         ...(cause instanceof AnalysisError
