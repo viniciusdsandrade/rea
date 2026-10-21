@@ -10,6 +10,7 @@ import type { JsonValue } from "../domain/jsonValue.js";
 import { createAnalysisProfile } from "../domain/analysisProfile.js";
 import { projectAnalysisError } from "../domain/analysisErrorProjection.js";
 import { AnalysisInputError } from "../domain/analysisErrorCore.js";
+import { ProviderAdapterError } from "../domain/providerAdapterError.js";
 import { createIdaDiagnosticRedactor } from "./IdaDiagnosticRedactor.js";
 import { decodeIdaToolResult } from "./IdaMcpConnection.js";
 import { IDA_PROVIDER_IDENTITY } from "./IdaProviderCapabilities.js";
@@ -474,6 +475,53 @@ describe("headless IDA operation failures", () => {
       }
     },
   );
+
+  it("keeps a provider failure primary when cancellation arrives while it unwinds", async () => {
+    const { root, target } = await createIdaTarget();
+    roots.push(root);
+    const producer = new RecordingIdaMcp(target, "headless");
+    const controller = new AbortController();
+    const failure = new ProviderAdapterError("ida", "transport", {
+      diagnostics: { reason: "upstream closed before cancellation" },
+    });
+    producer.beforeCall = async (name) => {
+      if (name !== "list_funcs") return;
+      // The failure is the physical outcome; the abort is queued behind it.
+      queueMicrotask(() => controller.abort("late stop"));
+      throw failure;
+    };
+    const client = new IdaSessionClient(
+      {
+        command: "fixture",
+        args: [],
+        env: {},
+        mode: "headless",
+        timeoutMs: 1000,
+        workspaceRoot: root,
+      },
+      target,
+      producer,
+    );
+    try {
+      const result = await client.execute(
+        "list_procedures",
+        {},
+        { signal: controller.signal },
+      );
+      expect(controller.signal.aborted).toBe(true);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error._tag).toBe("ProviderAdapterError");
+        expect(result.error.cause).toBe(failure);
+        expect(projectAnalysisError(result.error)).toMatchObject({
+          code: "execution_failure",
+          retryable: false,
+        });
+      }
+    } finally {
+      expect((await client.close()).ok).toBe(true);
+    }
+  });
 });
 
 const lookup = (query: string, fn: JsonValue, error: string | null) => [
