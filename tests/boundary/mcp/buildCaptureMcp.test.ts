@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { expect, it } from "vitest";
@@ -454,6 +454,48 @@ it("exports a task larger than the old 96 KiB refusal and keeps its prompt", asy
     },
     remediation: { action: expect.any(String) },
   });
+});
+
+it("refuses an unusable output folder before the export runs in the computer", async () => {
+  const { rea, client } = await fakes();
+  const id = await startBuildComputer(client, REQUEST);
+  await callOk(client, "start_build_capture", { computer_id: id });
+  for (const name of ["seed", "end"])
+    await callOk(client, "mark_build_checkpoint", { computer_id: id, name });
+  await callOk(client, "stop_build_capture", { computer_id: id });
+  const root = await createTestTempDirectory("build-out-unusable-");
+  const occupied = join(root, "occupied");
+  await mkdir(occupied);
+  await writeFile(join(occupied, "keep"), "");
+  const regularFile = join(root, "file");
+  await writeFile(regularFile, "occupied");
+  const candidates = [occupied, regularFile, join(regularFile, "bundle")];
+  for (const directory of candidates) {
+    const { error } = parseMcpToolError(
+      await client.callTool({
+        name: "export_build_environment",
+        arguments: { computer_id: id, tasks: [{ task: TASK }], directory },
+      }),
+    );
+    expect(error.code).toBe("invalid_request");
+    expect(error.details?.issues).toMatchObject([
+      { path: ["directory"], reason: "invalid_value" },
+    ]);
+  }
+  const calls = (await rea.notes("calls.jsonl")) as { argv: string[] }[];
+  expect(
+    calls.some(
+      ({ argv }) =>
+        argv[0] === "export-desktop-application" && !argv.includes("--schema"),
+    ),
+  ).toBe(false);
+  // A usable folder then exports, and that is the only export the computer ran.
+  await callOk(client, "export_build_environment", {
+    computer_id: id,
+    tasks: [{ task: TASK }],
+    directory: join(root, "notes"),
+  });
+  expect(await rea.notes("tasks.jsonl")).toEqual([TASK]);
 });
 
 it("refuses capture steps out of order and a capture of a bundle's computer", async () => {
