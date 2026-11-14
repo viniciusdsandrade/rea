@@ -1,5 +1,8 @@
+import { join } from "node:path";
+
 import { expect, it } from "vitest";
 
+import { createTestTempDirectory } from "../../../tests/fixtures/temporaryDirectory.js";
 import { exportBuild } from "./DesktopBuildExport.js";
 
 it.each([4, 8])(
@@ -42,7 +45,7 @@ it.each([4, 8])(
         consents: [],
       },
       {
-        directory: "/unused",
+        directory: join(await createTestTempDirectory("build-out-"), "bundle"),
         tasks: [
           {
             task: {
@@ -106,7 +109,7 @@ it.each([
         consents: [],
       },
       {
-        directory: "/unused",
+        directory: join(await createTestTempDirectory("build-out-"), "bundle"),
         tasks: [
           {
             task: {
